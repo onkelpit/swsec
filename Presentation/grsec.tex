@@ -22,6 +22,15 @@
 \definecolor{mygray}{rgb}{0.5,0.5,0.5}
 \definecolor{mymauve}{rgb}{0.58,0,0.82}
 
+\setbeamertemplate{blocks}[rounded][shadow=true]
+\addtobeamertemplate{block begin}{\pgfsetfillopacity{0.8}}{\pgfsetfillopacity{1}}
+%\setbeamercolor{structure}{fg=mygreen}
+\setbeamercolor*{block title example}{fg=blue!50,
+	bg= blue!10}
+\setbeamercolor*{block body example}{fg= blue,
+	bg= blue!5}
+
+
 \lstset{ %
   backgroundcolor=\color{white},   % choose the background color; you must add \usepackage{color} or \usepackage{xcolor}
   basicstyle=\tiny,        % the size of the fonts that are used for the code
@@ -52,7 +61,7 @@
 \useinnertheme{rectangles}
 \usecolortheme{default}
 
-\author{Marco Hoffmeier\and \and Christoph Hoopmann\and Peter Johennecken}
+\author{Marco Hoffmeier\and Christoph Hoopmann\and Peter Johennecken}
 \title{Softwaresicherheit WS 15/16}
 \subtitle{Grsecurity / PaX}
 \setbeamercovered{transparent} 

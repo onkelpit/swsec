@@ -34,24 +34,154 @@
 \section{PaX}
 \begin{frame}{PaX}
     \begin{itemize}
-        \item Speicherschutz durch zustätzliche Dateiattribute
+        \item Speicherschutz durch zusätzliche Dateiattribute
         \item Anfangs in ELF-Header (bei Gentoo immer noch)
     \end{itemize}
 \end{frame}
 
+\begin{frame}[fragile]{PaX}{PaX-Flags: pemRs}
+    \begin{figure}[h]
+        \label{lst:paxflagsaus}
+        \begin{lstlisting}[numbers=none, frame=single, lineskip={-2.5pt}, breaklines=true,language=bash]
+        [*root@grsec ~/SWSec #*] echo $0
+        zsh
+        [*root@grsec ~/SWSec #*] ./getenvaddr EGG ./exploitable
+        EGG will be at 0xffffdf9d
+        [*root@grsec ~/SWSec #*] ./exploitable $(python2 -c 'print("A"*52 + "\x9d\xdf\xff\xff")') 
+        Hi AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA???, I will copy your name to a 40byte stack buffer now
+        [*[root@grsec]#*] whoami && echo $0
+        root
+        bash
+        [*[root@grsec]#*] exit
+        exit
+        \end{lstlisting}
+        \caption{PaX-Flags: pemRs}
+    \end{figure}  
+\end{frame}
+
+\begin{frame}[fragile]{PaX}{PaX-Flags: PeMRs}
+    \begin{figure}[h]
+        \label{lst:paxflagsan}
+        \begin{lstlisting}[numbers=none, frame=single, lineskip={-2.5pt}, breaklines=true,language=bash]
+        [*root@grsec ~/SWSec #*] ./exploitable $(python2 
+        -c 'print("A"*52 + "\x9d\xdf\xff\xff")')
+        Hi AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA???, I will copy your name to a 40byte stack buffer now
+        [1]    412 killed (core dumped)  ./exploitable $(python2 -c 'print("A"*52 + "\x9d\xdf\xff\xff")')
+
+        [ 8218.606318] PAX: execution attempt in: <stack>, fffde000-fffff000 3fffffde000
+        [ 8218.606328] PAX: terminating task: /root/SWSec/exploitable(exploitable):400, uid/euid: 0/0, PC: 00000000ffffdf9d, SP: 00000000ffffe4b0
+        [ 8218.606332] PAX: bytes at PC: 90 90 90 90 90 90 90 90 31 c0 50 68 2f 2f 73 68 68 2f 62 69 
+        [ 8218.606347] PAX: bytes at SP-8: 41414141 ffffdf9d ffffe600 ffffe574 ffffe580 080484d1 f7fbf3dc ffffe4e0 00000000 f7e21497 00000002 f7fbf000 00000000 f7e21497 00000002 ffffe574 ffffe580 00000000 00000000 00000000 f7fbf000 0804820c
+        \end{lstlisting}
+        \caption{PaX-Flags: PeMRs}
+    \end{figure}
+\end{frame}
+
 \begin{frame}{PaX}{PaX-Flags}
-    \begin{itemize}
-        \item PAX\_PAGEEXEC
-        \item PAX\_EMUTRAMP
-        \item PAX\_MPROTECT
-        \item PAX\_RANDMMAP
-        \item PAX\_SEGMEXEC
-    \end{itemize}
+	\begin{exampleblock}{PAX\_PAGEEXEC}
+		Verhinderung der Ausführung von Code außerhalb der CODE-Sektion des Programmspeichers (NX-Bit).
+		PAGE\_FAULT wird geworfen.
+	\end{exampleblock}
+    \begin{exampleblock}{PAX\_EMUTRAMP}
+    	Ermöglicht die Ausführung dynamisch erzeugten Codes (Bsp.: JIT-Compiler). Ist ein PAGE\_FAULT-Handler.
+    \end{exampleblock}
+\end{frame}
+
+\begin{frame}{PaX}{PaX-Flags}
+	\begin{exampleblock}{PAX\_MPROTECT}
+		Verhindert die Überschreibung (mittels \glqq mmap\grqq~und \glqq mprotect\grqq)~des Codes auf den der IP für den nächsten Fetch zeigt. Diese erlauben entweder es nicht gleichzeitig auf den VRAM zu schreiben und ihn auszuführen. Folgende Kombinationen sind möglich (Rest durch Vanilla Kernel bereits geblockt):
+		\begin{itemize}
+			\item VM\_MAYWRITE
+			\item VM\_MAYEXEC
+			\item VM\_WRITE | VM\_MAYWRITE
+			\item VM\_EXEC | VM\_MAYEXEC
+		\end{itemize}
+	\end{exampleblock}
+\end{frame}
+
+
+\begin{frame}{PaX}{PaX-Flags}
+	\begin{exampleblock}{PAX\_RANDMMAP}
+		Verbesserte \glqq Randomisierung\grqq~der Speicheradressen durch mehr zufällig gewürfelte Bits in den Speicheradressen im Gegensatz zu ASLR.
+	\end{exampleblock}
+	\begin{exampleblock}{PAX\_SEGMEXEC}
+		Alternative Lösung zur Ausführungsverhinderung. Da PAGEEXEC auf x86 (nur 32-Bit) drastische Einbrüche der Performance nach sich zieht, wird SEGMEXEC hauptsächlich auf dieser Plattform angewandt. Auf anderen Architekturen wird von SEGMEXEC abgeraten.
+	\end{exampleblock}
+\end{frame}
+
+
 \end{frame}
 
 \section{GrSecurity}
+\begin{frame}{GrSecurity}{Konfiguration I}
+	GrSecurity besteht aus mehreren Komponenten. Die größte Komponente bildet das RBAC (Role-based accces control)-System.
+	Zusätzlich werden Risiken bei der Erzeugung von Sandboxen mittels \glqq chroot\grqq~minimiert, der Zugriff auf \textbf{/proc} wird beschränkt und es gibt sehr umfangreiche Logging-Funktionen.
+\end{frame}
+
+\begin{frame}{RBAC-System}
+	Die RBAC-Konfiguration (im Regelfall \textbf{/etc/grsec/}) besteht aus:
+	\begin{itemize}
+		\item \textbf{policy}\\ RBAC-Richtlinien
+		\item \textbf{lern\_config}\\ Substitutionshilfen für den Lern-Modus
+		\item \textbf{pw}\\ Konfigurierte Passwörter
+		\item \textbf{learning.log}\\ Temporäres Log alles Syscalls (Lernmodus)
+	\end{itemize}
+\end{frame}
+
+\begin{frame}{RBAC-System}{Konfiguration II}
+	
+	\begin{itemize}
+		\item policy
+		\item roles
+		\item subjects
+		\item objects
+	\end{itemize}
+	Grundsätzlich ist alles verboten und muss erlaubt werden!
+\end{frame}
+
+\begin{frame}{Chroot-Hardening}
+	\begin{itemize}
+		\item \glqq chroot\grqq~innerhalb \glqq chroot\grqq $\Rightarrow$ Schwachstelle
+		\item Syscalls außerhalb von \glqq chroot\grqq -Umgebung
+	\end{itemize}
+\end{frame}
+
+\begin{frame}{Miscellaneous Features}
+	\begin{itemize}
+		\item forks
+		\item mount unmount
+		\item Erstellung und Zerstörung von IPCs
+		\item BadUSB
+	\end{itemize}
+\end{frame}
 
 \section{Userspace-Tools}
+\begin{frame}{Gradm}
+	\begin{itemize}
+		\item Anmeldung ins RBAC
+		\item Konfiguration des Learning-Modes
+		\item anlegen neuer Rollen
+	\end{itemize}
+\end{frame}
+
+\begin{frame}{setfattr/getfattr}
+	\begin{itemize}
+		\item setzen und entziehen der erweiterten Dateiattribute
+		\item früher (auf Gentoo noch immer) mittels \glqq paxctl\grqq
+	\end{itemize}
+\end{frame}
+
+\section{Ausblick aufs Praktikum}
+\begin{frame}{Aufgaben für das Praktikum}
+	Ausführung des Exploits unter
+	\begin{itemize}
+		\item Vanilla Kernel
+		\item PaX-Kernel default Flags
+		\item PaX-Kernel minimale Flags
+		\item RBAC keine Konfiguration
+		\item RBAC Learning
+	\end{itemize}
+\end{frame}
 
 \begin{frame}{Literatur}
     \bibliographystyle{natdin}
