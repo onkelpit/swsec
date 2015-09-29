@@ -2,19 +2,42 @@
 
 \mode*
 \begin{frame}
-	\titlepage
+    \titlepage
 \end{frame}
 
 \begin{frame}
-	\tableofcontents
+    \tableofcontents
 \end{frame}
 
 \section{Einleitung}
-\begin{frame}{Grsecurity}{Was ist Grsecurity?}
-	\begin{Definition} %%Definition
-    		Grsecurity® is an extensive security enhancement to the Linux kernel that defends against a wide range of security threats through intelligent access control, memory corruption-based exploit prevention, and a host of other system hardening that generally require no configuration. It has been actively developed and maintained for the past 14 years. Commercial support for grsecurity is available through Open Source Security, Inc. \cite{grsechp}
-	\end{Definition}
+\begin{frame}{Grsecurity}{Was ist GrSecurity / PaX?}
+    \begin{itemize}
+        \item Patch für den Linux Kernel
+        \item RBAC-System und Speicherschutz
+        \item Ähnlichkeiten zu u.A.
+            \begin{itemize}
+                \item SELinux
+                \item AppArmor
+                \item Toymoyo
+            \end{itemize}
+        \item Durch Gentoo ünterstützt
+        \item Entwicklung seit 2001 als Fork von Openwall
+    \end{itemize}
 \end{frame}
+
+\begin{frame}{Grsecurity}{Was ist Grsecurity?}
+    \begin{Definition} %%Definition
+        Grsecurity® is an extensive security enhancement to the Linux kernel that defends against a wide range of security threats through intelligent access control, memory corruption-based exploit prevention, and a host of other system hardening that generally require no configuration. It has been actively developed and maintained for the past 14 years. Commercial support for grsecurity is available through Open Source Security, Inc. \cite{grsechp}
+    \end{Definition}
+\end{frame}
+
+\section{PaX}
+
+
+\section{GrSecurity}
+
+\section{Userspace-Tools}
+
 \begin{frame}{Literatur}
     \bibliographystyle{natdin}
     \bibliography{Quellen}
