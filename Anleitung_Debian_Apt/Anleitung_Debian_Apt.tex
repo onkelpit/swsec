@@ -55,7 +55,7 @@ pdfborder={0 0 0}]{hyperref}
     keywordstyle=\color{blue},       % keyword style
     language=bash,                 % the language of the code
     otherkeywords={*,...},            % if you want to add more keywords to the set
-    numbers=right,                    % where to put the line-numbers; possible values are (none, left, right)
+    numbers=none,                    % where to put the line-numbers; possible values are (none, left, right)
     numbersep=5pt,                   % how far the line-numbers are from the code
     numberstyle=\tiny\color{mygray}, % the style that is used for the line-numbers
     rulecolor=\color{black},         % if not set, the frame-color may be changed on line-breaks within not-black text (e.g. comments (green here))
@@ -78,20 +78,24 @@ pdfborder={0 0 0}]{hyperref}
 \end{figure}
 \begin{abstract}
 \end{abstract}
-\tableofcontents
-\newpage
+%	\tableofcontents
+%\newpage
 % Erstelle eine Hauptüberschrift
-\section{Einleitung}
+\section{VirtualBox Image}
+Das Image für das Praktikum kann über TODO herunter geladen werden.
+
+In VirtualBox den Punkt \glqq Appliance importieren\grqq aufrufen und Image über Assistenten einspielen.
+
+Für das Praktikum wurde der Benuter \glqq john\grqq mit dem Password \glqq john\grqq angelegt.
 \section{APT-Repoisitory hinzufügen}
 Um das Repository von corsac (\url{http://molly.corsac.net/~corsac/debian/kernel-grsec/packages/}) in den Packetmanager zu integrieren muss die Datei \textit{/etc/apt/sources.list} verändert werden.
 
-Hierzu wird 
+Dazu wird der folgende Text an die Datei an gehangen. 
 \begin{lstlisting}
 deb http://perso.corsac.net/~corsac/debian/kernel-grsec/packages/ jessie/
 \end{lstlisting}
-and die Datei angehängt.
 
-Zur Überprüfung der Dateien müssen wir den PGP Schlüssel von der Seite herunterladen und mit APT bekannt machen.
+Zur Überprüfung der Dateien müssen der PGP Schlüssel von der Seite heruntergeladen und mit APT bekanntgemacht werden.
 \begin{lstlisting}
 wget -O - http://www.corsac.net/71ef0ba8.asc | apt-key -
 \end{lstlisting}
@@ -101,23 +105,21 @@ Ein Update des APT-Baumes ermöglicht uns die Installation.
 apt-get update
 \end{lstlisting}
 
-Nun können wir grsec und pax installieren mit:
+Nun kann GrSec und PaX mit dem folgenden Kommando installiert werden.
 \begin{lstlisting}
 apt-get install linux-image-3.14.50-grsec+ paxctl paxtest
 \end{lstlisting}
 
-Der neue Kernel wird gleich in den Bootmanager grub eingetragen. Beim Neustart ist darauf zu achten, dass der grsec-Kernel nicht der Standartkernel von grub ist. Da seine Versionsnummer niedriger als die des normalen Debian Kernels ist, muss dieser über die erweiterten Optionen gestartet werden.
+Der neue Kernel wird gleich in den Bootmanager grub eingetragen. Beim Neustart ist darauf zu achten, dass der GrSec-Kernel nicht der Standartkernel von grub ist. Da seine Versionsnummer niedriger als die des normalen Debian Kernels ist, muss dieser über die erweiterten Optionen gestartet werden.
 
-Mit dem Befehl
+Eine Übersicht über die Parameter (nur GrSec und PaX) die beim kompilieren des Kernels benutzt wurden, lässt sich mit dem folgenden Befehl ausgeben.
 \begin{lstlisting}
 cat /boot/config-3.14.50-grsec+ | grep -E '(PAX|GRKERN)'
 \end{lstlisting}
-können wir uns ansehen mit welchen Parametern der Kernel kompiliert wurde.
 
-Mit den Befehlen
+Mit \glqq paxtest\grqq kann das PaX-System auf Funktion überprüft werden.
 \begin{lstlisting}
 paxtest kiddie
 paxtest blackhat
 \end{lstlisting}
-können wir die funktionalität von PAX überprüfen.
 \end{document}
