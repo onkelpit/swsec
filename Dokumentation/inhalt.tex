@@ -1,0 +1,426 @@
+\section{Einleitung}
+\label{sec:Einleitung}
+GrSecurity / PaX ist ein funktionsreiches Patchset für den Linux Kernel. Das Hauptaugenmerk GrSecurity's liegt hierbei auf der Implementation eines RBAC-Systems zudem stellt \fnurl{PaX}{https://pax.grsecurity.net/} Speicherschutz-mechanismen wie beispielsweise W$^\land$X, ASLR und Trampolin-Emulation bereit.
+
+Linux-Server und Embedded-Systems definieren hier die häufigsten Anwendungsgebiete.
+Zielsetzung ist hierbei die Härtung des Systems hinsichtlich der Prävention von Exploits und unerwünschtem Verhalten im Gegensatz zu dem herkömmlichen Prinzip des nachträglichen Behebens von bekannt gewordenen Schwachstellen.
+
+Diese Vorgehens- und Denkweise ist vorbildlich und auch bei anderen Projekten zu finden, Stichworte hierfür wären:
+\begin{itemize}
+\item \fnurl{SELinux}{http://selinuxproject.org/page/Main_Page}
+\item \fnurl{AppArmor}{http://wiki.apparmor.net/index.php/Main_Page}
+\item \fnurl{Tomoyo}{http://tomoyo.osdn.jp/}
+\end{itemize}
+
+Das Projekt wird hauptsächlich durch Spendengelder finanziert und von den Gentoo-Entwicklern unterstützt. Gentoo bietet ebenfalls eine Implementierung von GrSecurity in Form des Hardened Gentoo Porttrees.
+
+\newpage
+Die offizielle Kurzbeschreibung der \fnurl{Projektseite}{https://www.grsecurity.net}:
+\begin{quote}
+Grsecurity® is an extensive security enhancement to the Linux kernel that defends against a wide range of security threats through intelligent access control, memory corruption-based exploit prevention, and a host of other system hardening that generally require no configuration. It has been actively developed and maintained for the past 14 years. Commercial support for grsecurity is available through Open Source Security, Inc.
+\end{quote}
+
+Die Entwicklung begann im Februar 2001 als Fork des \fnurl{Openwall Projekts}{http://www.openwall.com/}. Die erste offizielle Veröffentlichung war für den Linux Kernel 2.4.1.
+PaX wird anonym und getrennt von GrSecurity entwickelt. Es wird lediglich durch GrSecurity mit bereitgestellt und ist in den meisten Distributionen bereits Default.
+
+
+\myfig{grsec_logo.png}{0.9}{GrSecurity Projektlogo}
+\newpage
+
+\section{PaX}
+\label{sec:PaX}
+PaX ist ein Kernelsicherheitspatch, welches in der Regel mit GrSecurity ausgeliefert wird. Dieser Patch forciert je nach gesetzten Dateiattributen eine strengere Speicherverwaltung. Diese sogenannten Flags wurden anfangs mittels der Pax-Utils direkt im ELF-Header geschrieben (Bei Gentoo immer noch), mittlerweile, aufgrund der mangelnden Portierbarkeit der so entstandenen Dateien, werden die Flags in den erweiterten Dateiattributen des Dateisystems gespeichert (siehe: \nameref{subsec:setfattr-getfattr}).
+
+\myfig{pax_tux.png}{0.7}{PaX Projektlogo}
+
+Es folgen 2 Beispiele eines einfachen Stack-Buffer Overflows bei dem folgender Shellcode injiziert wird.
+\begin{figure}[h]
+\label{shellcode}
+\begin{lstlisting}[numbers=none, frame=single, lineskip={-2.5pt}, breaklines=true]
+\x31\xc0\x50\x68\x2f\x2f\x73\x68\x68\x2f\x62\x69\x6e\x89\xe3\x89\xc1\x89\xc2\xb0\x0b\xcd\x80\x31\xc0\x40\xcd\x80
+\end{lstlisting}
+\caption{execve("/bin/sh")}
+\end{figure}
+
+In den folgenden beiden Beispielen sieht man die Wirkung wenn die Schutzfunktionen von PaX aktiv, beziehungsweise inaktiv sind.
+
+\begin{figure}[h]
+\label{lst:paxflagsaus}
+\begin{lstlisting}[numbers=none, frame=single, lineskip={-2.5pt}, breaklines=true]
+[*root@grsec ~/SWSec #*] echo $0
+zsh
+[*root@grsec ~/SWSec #*] ./getenvaddr EGG ./exploitable
+EGG will be at 0xffffdf9d
+[*root@grsec ~/SWSec #*] ./exploitable $(python2 -c 'print("A"*52 + "\x9d\xdf\xff\xff")') 
+Hi AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA???, I will copy your name to a 40byte stack buffer now
+[*[root@grsec]#*] whoami && echo $0
+root
+bash
+[*[root@grsec]#*] exit
+exit
+\end{lstlisting}
+\caption{PaX-Flags: pemRs}
+\end{figure}
+
+\begin{figure}[h]
+\label{lst:paxflagsan}
+\begin{lstlisting}[numbers=none, frame=single, lineskip={-2.5pt}, breaklines=true]
+[*root@grsec ~/SWSec #*] ./exploitable $(python2 
+-c 'print("A"*52 + "\x9d\xdf\xff\xff")')
+Hi AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA???, I will copy your name to a 40byte stack buffer now
+[1]    412 killed (core dumped)  ./exploitable $(python2 -c 'print("A"*52 + "\x9d\xdf\xff\xff")')
+
+[ 8218.606318] PAX: execution attempt in: <stack>, fffde000-fffff000 3fffffde000
+[ 8218.606328] PAX: terminating task: /root/SWSec/exploitable(exploitable):400, uid/euid: 0/0, PC: 00000000ffffdf9d, SP: 00000000ffffe4b0
+[ 8218.606332] PAX: bytes at PC: 90 90 90 90 90 90 90 90 31 c0 50 68 2f 2f 73 68 68 2f 62 69 
+[ 8218.606347] PAX: bytes at SP-8: 41414141 ffffdf9d ffffe600 ffffe574 ffffe580 080484d1 f7fbf3dc ffffe4e0 00000000 f7e21497 00000002 f7fbf000 00000000 f7e21497 00000002 ffffe574 ffffe580 00000000 00000000 00000000 f7fbf000 0804820c
+\end{lstlisting}
+\caption{PaX-Flags: PeMRs}
+\end{figure}
+
+\newpage
+\subsection{PAX\_PAGEEXEC}
+\label{subsec:PAX_PAGEEXEC}
+Implementiert die Codeausführungsverhinderung für Speicherseiten indem der virtuelle Speicher des gestarteten Prozesses mit dem NX-Bit markiert wird (Ausnahme, logischerweise: Code-Section). Unter Windows ist diese Funktion als \fnurl{DEP}{https://en.wikipedia.org/wiki/Data_Execution_Prevention} (Data-Execution-Prevention) bekannt, bei weitem aber nicht ausreichend. Im Vanilla Linux-Kernel wird beim Start des Prozesses der ELF-Header und seine Sektionen ausgewertet, hierin finden sich auch die Speicherbereiche die mit Not-Executable "`gemappt"' werden sollen. Diese Funktionalität ist aber ebenso wie DEP unzulänglich, da andere Datenbereiche meist nicht geschützt werden. PAGEEXEC erweitert die Codeausführungsverhinderung dahingehend, dass der gesamte VRAM eines Prozesses NX-"`gemappt"' wird. Stellt die verwendete CPU-Architektur (32-bit x86) kein NX-Feature bereit, so emuliert PAGEEXEC diese Funktion durch Überladung des Supervisor-Bits. In einem solchen Fall ist von der Verwendung von PAGEEXEC abzuraten und die Verwendung von \nameref{subsection:PAX_SEGMEXEC} aus Performance-Gründen zu empfehlen.
+Versucht ein Programm Code auszuführen der in einem mit NX-Bit "`gemappten"' Speicherbereich liegt, so löst dies eine PAGE\_FAULT aus und das Programm wird beendet. Der Versuch wird dabei im Kernel Log erfasst.
+
+\subsection{PAX\_EMUTRAMP}
+\label{subsec:PAX_EMUTRAMP}
+Aufgrund der Tatsache, dass die PaX Features PAGEEXEC/SEGMEXEC und MPROTECT generell Codeausführung außerhalb der Code-Section unterbinden, ist EMUTRAMP entstanden. Viele Programme und auch Compiler verwenden zur Laufzeit generierten Code. Logischerweise befindet sich dieser außerhalb der Code-Section und würde somit von PAGEEXEC oder SEGMEXEC mit einem PAGE\_FAULT beantwortet werden. Um dennoch dynamische Code-Generierung, beispielsweise bei einem JIT-Compiler, zu ermöglichen, implementiert EMUTRAMP einen separaten PAGE\_FAULT-Handler. Wird eine PAGE\_FAULT erzeugt, greift jener Handler und prüft, ob es sich eine Kernel-eigene Signal-Handling Routine handelt oder um ein sogenanntes Trampolin (Verwendung bei Nested-Functions in GCC). Ist dem so, wird der Code dennoch ausgeführt.
+Anzumerken hierbei ist, dass EMUTRAMP PAGEEXEC/SEGMEXEC impliziert. Es handelt sich somit nicht um unerwünschtes Verhalten, wenn ein Prozess mit den PaX-Flags \textbf{pEmRs} dennoch keinen Code auf dem Stack ausführen kann.
+
+\subsection{PAX\_MPROTECT}
+\label{subsec:PAX_MPROTECT}
+PAGEEXEC/SEGMEXEC verhindern bereits viele Arten von unerwünschter Codeausführung, jedoch bleibt ein Angriffsszenario weiterhin bestehen: \fnurl{mmap()}{http://man7.org/linux/man-pages/man2/mmap.2.html} und \fnurl{mprotect()}{http://man7.org/linux/man-pages/man2/mprotect.2.html}.
+
+Diese POSIX-Funktionen in Kombination erlauben es dem Angreifer zuerst eine Datei innerhalb des virtuellen RAMs des Prozesses zu "`mappen"' (mmap()), um den Speicher anschließend mittels mprotect() auf PROT\_EXEC "`umzumappen"'. Infolgedessen kann der Program-Counter mit der durch mmap() "`gemappten"' Speicheradresse überschrieben werden und die Ausführung des Codes beginnt mit dem nächsten Instruction-Fetch.
+MPROTECT unterbindet dieses indem es die Mapping-States des VRAMs verschärft. Hierzu werden die Routinen von mmap() (do\_mmap\_pgoff(), do\_brk(): mm/mmap.c) und mprotect() (sys\_mprotect(): mm/mprotect.c) um eine Zustandskontrolle erweitert:
+
+Zu keinem Zeitpunkt darf ein Mapping die Zustände VM\_WRITE und VM\_EXEC gleichzeitig besitzen. Ein Prozess kann diesen Zustand beliebig oft wechseln, ähnlich dem \fnurl{W$^\land$X-Ansatz}{https://marc.info/?l=openbsd-misc&m=105056000801065} von OpenBSD. Desweiteren gibt es die Einschränkung ob ein Mapping über mprotect() verändert werden darf: VM\_MAYWRITE und VM\_MAYEXEC.
+Hieraus resultieren 4 legitime Mappings (der Vanilla Kernel unterbindet bereits bestimmte Kombinationen):
+\begin{itemize}
+\item VM\_MAYWRITE
+\item VM\_MAYEXEC
+\item VM\_WRITE $\mid$ VM\_MAYWRITE
+\item VM\_EXEC $\mid$ VM\_MAYEXEC
+\end{itemize}
+Es wird zwischen 3 Arten von Mappings unterschieden (der Lesbarkeit halber wurden folgende Abkürzungen verwendet):
+\begin{quote}
+\begin{tabular}{llllll}
+Wr & $\rightarrow$ & VM\_WRITE & X & $\rightarrow$ & VM\_EXEC \\
+mWr & $\rightarrow$ & VM\_MAYWRITE & mX & $\rightarrow$ & VM\_MAXEXEC
+\end{tabular}
+\end{quote}
+
+\begin{tabular}{|p{4.5cm}p{4cm}p{5cm}|}
+\hline
+Art & Standard Protection & MPROTECT Enforced \\
+\hline
+Anonymous mappings (stack, brk()/mmap() controlled heap) & (Wr $\mid$ X $\mid$ mWr $\mid$ mX) & (Wr $\mid$ mWr) \\
+\hline
+Shared mappings & (Wr $\mid$ mWr) & - \\
+\hline
+File mappings & \textless user choice\textgreater & (Wr $\mid$ mWr) oder (mWr) insofern bereits bei mmap() PROT\_WRITE gefordert wurde, ansonsten (X $\mid$ mX) \\
+\hline
+\end{tabular}
+
+Selbstverständlich werden durch das "`enforcen"' der PAGE\_PROT einige Programme in ihrer Funktion beeinträchtigt. Hierzu zählen vor allem die dynamischen generierten Trampoline von GCC und die Kernel Return Stubs. Durch \nameref{subsec:PAX_EMUTRAMP} lassen sich diese jedoch wieder korrigieren. Andere Programme wie beispielsweise Firefox, Skype oder Java werden aber derart in ihrer Funktionsweise eingeschränkt, als dass nur das Aufheben von MPROTECT für den jeweiligen Prozess eine Lösung darstellt.
+MPROTECT ist zusammen mit PAGEEXEC/SEGMEXEC der Hauptgrund für die Fehlfunktion von Software bei einem GrSecurity/PaX gepatchten Linux.
+
+\subsection{PAX\_RANDMMAP}
+\label{subsec:PAX_RANDMMAP}
+Während das einfache, bereits im Vanilla Kernel integrierte, \fnurl{ASLR}{https://en.wikipedia.org/wiki/Address_space_layout_randomization} bereits seine Dienste leistet, ist es weiterhin durch \fnurl{Heap Spraying}{https://en.wikipedia.org/wiki/Heap_spraying} oder \fnurl{ROP}{https://en.wikipedia.org/wiki/Return-oriented_programming} wie beispielsweise der \fnurl{ret2libc}{https://en.wikipedia.org/wiki/Return-to-libc_attack}-Angriff angreifbar. ASLR würfelt bei jedem Start eines Prozesses dessen Stackbase, Managed-Heap Base und die Adressen der dynamisch gelinkten Bibliotheken aus. Ein Beispiel für eine Angriffstechnik auf ASLR sei die sogenannte \fnurl{NOP-Slide}{https://en.wikipedia.org/wiki/NOP_slide}. Wie auch bei einfachen Stack-Overflows wird hierbei der Shellcode in den Speicher des Prozesses gebracht und anschließend der EIP überschrieben. Aufgrund der Tatsache dass die Adresse des sich im Prozessspeicher befindlichen Exploits unbekannt ist, wird das Exploit daher mit NOP-Bytes voran injiziert. So kann die Warscheinlichkeit die richtige Adresse zu erraten drastisch erhöht werden.
+
+PAX\_RANDMMAP verbessert die schwache Implementierung von ASLR indem es mehr Entropie in die Auswürfelung der Speicheradressen bringt. Dabei greift es wie auch \nameref{subsec:PAX_MPROTECT} in do\_mmap() ein:
+Die vom User übergebene Adresse wird hierbei respektiert, erst wenn diese nicht verfügbar ist wird im zweiten Schritt eine zufällige Adresse ausgewürfelt. Hierzu randomisiert PaX die Bits 12-27 vRollenon TASK\_UNMAPPED\_BASE (Startadresse, wird durch arch\_get\_unmapped\_area() in mm/mmap.c verwendet um freien Speicher zu finden) und ignoriert den User-Value insofern es sich um ein File-Mapping handelt. Desweiteren wird beim Start eines Prozesses durch load\_elf\_binary() in fs/binfmt\_elf.c ebenfalls die Basisadresse für dynamisch gelinkte Bibliotheken (ELF\_ET\_DYN\_BASE) ausgewürfelt: Als Ausgangsadresse wird 0x08048000 verwendet und anschließend delta\_exec, ein Zufallswert, hinzugefügt.
+
+\newpage
+Die deutlich erhöhte Entropie von 16 auf 24 bits macht sich bemerkbar:\\
+Die Stack Base Adresse wird zu einem Vielfachen von 16Byte randomisiert. Die Adresse liegt demnach innerhalb eines Bereiches von 256MiB auf einer 32-bit Architektur. Das ergibt 16 Millionen mögliche Positionen - oder 24-Bit Entropie. Zu beachten ist natürlich, dass eine entsprechend groß gewählte NOP-Slide auch hierbei wieder zum Erfolg führen kann: Jede 16-Byte NOP-Slide erhöhen die Chance die richtige Adresse zu erraten um 1. Bei einer NOP-Slide von 128-Byte bedeutet dies eine Chance von 9/16 Millionen.
+Somit stellt RANDMMAP keinen Präventivschutz dar, sondern erschwert lediglich deutlich die Erfolgschancen auf einen Hack.
+
+\subsection{PAX\_SEGMEXEC}
+\label{subsec:PAX_SEGMEXEC}
+Ähnlich wie \nameref{subsec:PAX_PAGEEXEC} implementiert SEGMEXEC auch das NX-Feature für Speicherseiten. Während PAGEEXEC auf den meisten Systemen zum Einsatz kommt, kann es auf IA-32 Prozessoren zu einer drastischen Performance Einbuße führen. Intels 32-Bit Architektur unterstützt das NX Bit nicht und PAGEEXEC muss es infolgedessen emulieren.
+Abhilfe hierbei schafft SEGMEXEC:
+
+Der virtuelle Speicher eines Prozesses von 3GiB wird hierbei in 2 Teile geteilt. Die oberen 1,5GiB dienen hierbei als Datenspeicher, die unteren als Codespeicher. Alle durch mmap() zur Laufzeit erzeugten Mappings werden dabei gespiegelt (vma mirroring). Das bedeutet, dass das Mapping beider VRAM Hälften auf ein und dieselbe echte Speicherseite erfolgt, so dass es nicht zu einer Verdoppelung des verwendeten Speichers kommt. Der Codespeicher ist selbstverständlich schon zuvor gemapped worden und befindet sich daher nur in der unteren Hälfte des VRAMs.
+
+Das NX-Feature wird hierbei wie folgt emuliert:\\
+Erfolgt ein Instruction-Fetch auf eine Seite so muss unterschieden werden, ob das gewünschte Mapping ein Data-only oder ein allgemeines Data Mapping war. Dazu wird geprüft ob entsprechendes Mapping in beiden Speicherhälften vorhanden ist. Ist dem nicht so (konsequenter Weise bei data-only), so löst dieses eine PAGE\_FAULT aus. Anders hingegen bei Read/Write Access: Hierbei kann insofern die Seite in beiden Hälften vorhanden ist der Zugriff direkt erfolgen.\\
+SEGMEXEC findet heute nur noch bei 32-Bit Architekturen Verwendung und es wird bei anderen Architekturen von seiner Verwendung abgeraten.
+
+\newpage
+\section{GrSecurity}
+\label{sec:GrSecrity}
+Der GrSecurity Patch komplettiert die Härtung des Kernels durch ein \fnurl{RBAC (Role-based access control)}{https://en.wikipedia.org/wiki/Role-based_access_control})-System und verschiedener kleinerer Features wie beispielsweise Chroot-hardening und \textbf{/proc}-Beschränkungen.
+
+\subsection{RBAC-System}
+\label{subsec:RBAC-System}
+Das RBAC-System von GrSecurity funktioniert ähnlich wie andere \fnurl{MAC (Mandatory Access Control)}{https://en.wikipedia.org/wiki/Mandatory_access_control}-Systeme. Die Konfiguration ist im Regelfall unter \textbf{/etc/grsec/} zu finden und setzt sich wie folgt zusammen:
+
+\begin{tabular}{|ll|}
+\hline
+Datei & Funktion \\
+\hline
+policy & RBAC-Richtlinien \\
+learn\_config & Substitutionshilfen für Lern-Modus \\
+pw & Konfigurierte Passwörter \\
+learning.log & Temporäres Log aller Syscalls (Lernmodus) \\
+\hline
+\end{tabular}
+
+Die Konfiguration des RBAC-Systems erfolgt wie bereits erwähnt über die Datei \textbf{policy}. Diese kennt \textbf{roles}, \textbf{subjects} und \textbf{objects}.\\
+Eine Rolle definiert einen Prozess oder Kontext indem ein Subjekt ausgeführt werden darf. Jedes Subjekt beinhaltet wiederum Regeln für die Objekte. Objekte sind Ressourcen, das können entweder andere Programme, Dateien, Verzeichnisse oder Sockets sein. Diese Objektregeln eines Subjekts definieren wie das Subjekt mit dem Objekt kommunizieren darf.\\
+Die gesamte Konfiguration erfolgt im opt-out Verfahren. Das heißt dass pauschal alles verboten ist und Sonderrechte für alle benötigten Anwendungen eingeholt werden müssen.
+
+\newpage
+Der Aufbau strukturiert sich dabei wie folgt:\\
+Zuerst muss die Rolle definiert werden:
+
+\begin{figure}[h]
+\label{lst:paxflagsan}
+\begin{lstlisting}[numbers=none, frame=single, lineskip={-2.5pt}, breaklines=true]
+role choopm u
+role_allow_ip   192.168.0.0/16
+role_allow_ip   127.0.0.1/8
+# Role: choopm
+\end{lstlisting}
+\caption{Rollendefintion GrSecurity}
+\end{figure}
+
+Hierdurch weiß GrSecurity, dass die nun folgende \textbf{subject} Definitionen sich auf die Rolle \textbf{choopm} beziehen welche sich sowohl lokal, als auch aus dem IP-Bereich 192.168.0.0/16 verbinden darf. Jedes \textbf{subject} stellt ein Objekt im Dateisystem dar, dieses können sowohl Programme als auch Pfade sein. Dem \textbf{subject} untergeordnet sind dann die \textbf{objects}. Diese kennzeichnen inwiefern das entsprechende \textbf{subject} im Kontext der jeweiligen Rolle mit welchen Ressourcen unter welchen Bedingungen/Zugriffsrechten agieren darf.
+
+Wichtig hierbei ist:\\
+Jede Defintion vererbt ihre Berechtigungen an unterliegende Verzeichnisse.
+
+Angenommen man würde in einer Subjekt-Defintion das Objekt \textbf{/run} mit den Berechtigungen \textbf{rw} definieren, so könnte der Prozess (Subjekt) unter der entsprechenden Rolle auf alle Dateien und Verzeichnisse unterhalb von \textbf{/run} lesend und schreibend zugreifen. Dieses Vererbungsmodell erleichtert den Konfigurationsaufwand enorm.
+
+Es folgt nun ein simples Beispiel anhand des Subjektes von i3 wobei hier näher auf die Konfiguration eingegangen wird.
+
+\newpage
+Ein simples Beispiel einer Subjekt-Defintion anhand von i3 (Window Manager):
+\begin{lstlisting}[numbers=none, frame=single, lineskip={-2.5pt}, breaklines=true]
+role choopm u
+role_allow_ip   192.168.0.0/16
+role_allow_ip   127.0.0.1/8
+# Role: choopm
+
+ subject /usr/bin/i3 o {
+     /               h
+     /etc                r
+     /etc/grsec          h
+     /etc/gshadow            h
+     /etc/passwd         h
+     /etc/shadow         h
+     /etc/ssh            h
+     /home               h
+     /home/choopm            h
+     /home/choopm/.dotfiles      h
+     /home/choopm/.dotfiles/.i3/config   r
+     /proc               r
+     /proc/bus           h
+     /proc/kallsyms          h
+     /proc/kcore         h
+     /proc/modules           h
+     /proc/slabinfo          h
+     /proc/sys           h
+     /run                h
+     /run/user/1000/i3       wcd
+     /usr                h
+     /usr/bin            h
+     /usr/bin/i3         rx
+     /usr/bin/urxvt          x
+     /usr/lib            rx
+     /usr/lib/modules        h
+     /usr/share          r
+     -CAP_ALL
+     bind    disabled
+     connect disabled
+ }
+ 
+# Role: choopm
+ subject /usr/bin/i3-msg o {
+     /               h
+ ............
+\end{lstlisting}
+
+Deutlich zu erkennen nach der Definition des Subjects sind die Zugriffsrechte für die Objekte. Kurze Randinfo: Bei i3 handelt es sich um einen minimalistischen Tiling Window Manager.\\
+Selbstverständlich benötigt der Prozess keine Read-Berechtigungen für \textbf{/} und einige kritische Dateien unter \textbf{/etc}. Auch das Homedir des Users choopm ist für die korrekte Ausführung nicht von Nöten. Ganz im Gegensatz dazu jedoch die Konfigurationsdatei \textbf{/home/choopm/.dotfiles/.i3/config}. Hierbei erkennt man schnell wohin das führt:\\
+\textbf{Jeder Prozess erhält wirklich nur die absolut notwendigen Berechtigungen die für eine korrekte Ausführung benötigt werden. Nicht mehr, nicht weniger.}\\
+Es folgt das Interface zum Kernel unter \textbf{/proc} welches der Window Manager ebenfalls nur bedingt benötigt. Mögliche Beispiele wären \textbf{/prof/self} oder \textbf{/proc/\textless child pid\textgreater /\textless fifo\textgreater}.
+Das \textbf{/run} Verzeichnis stellt eine Besonderheit dar. Hier werden in aller Regel nach POSIX-Standard UNIX-Sockets und andere Pipes angelegt die gerade für die Inter-Prozess-Kommunikation notwendig sind. Jedoch benötigt i3 nur Zugriff auf sein eigene Pipe im Verzeichnis (\textbf{/run/user/1000/i3}. Durch die Berechtigung \textbf{wcd} kann i3 in diesem Verzeichnis Dateien beschreiben (w), Dateien erstellen (c) und löschen (d). Dies ist auch zwingend notwendig, da i3-msg beispielsweise mittels eines UNIX-Sockets in \textbf{/run/user/1000/i3/ipc} mit i3 kommunziert.
+Eine weitere interessante Objektdefintion wäre \textbf{/usr/bin/urxvt          x}. Diese erlaubt i3 den Prozess \textbf{/usr/bin/urxvt} zu starten. Hierbei handelt es sich um ein minimalistisches Terminal, ähnlich xterm. Würde diese Definition fehlen, so könnte der Anwender kein Terminal in seinem Window Manager starten und diesen damit nutzlos machen.\\
+Zum Schluss dieser jeden Subjekt-Definition werden über \textbf{-CAP\_ALL} alle Berechtigungen entzogen, siehe \fnurl{Capabillity Names and Descriptions}{https://en.wikibooks.org/wiki/Grsecurity/Appendix/Capability_Names_and_Descriptions} und die Erstellung eines Server-Sockets, sowie das Verbinden zu anderen Sockets ebenfalls verboten.
+
+Wie sicher schon aufgefallen sein sollte werden die Subjekte bei ihrer Defintion ebenfalls mit "`Rechten"' versehen (\textbf{subject /usr/bin/i3 o \{ \dots}). Hierbei handelt es sich um den sogenannten Subject-Mode. Es folgt eine Tabelle der möglichen Subject-Modes und deren Auswirkungen:\\
+\begin{tabular}{|lp{13cm}|}
+\hline
+Mode & Meaning \\
+\hline
+a & Allow this process to talk to the /dev/grsec device.\\
+b & Enable process accounting for processes in this subject.\\
+d & Protect the /proc/\textless pid\textgreater /fd, /proc/\textless pid\textgreater /mem, /proc/\textless pid\textgreater /cmdline, and /proc/\textless pid\textgreater /environ entries for processes in this subject.\\
+h & This process is hidden and only viewable by processes with the v mode.\\
+i & Enable inheritance-based learning, causing all accesses of this subject and anything it executes to be logged as originating from this subject. The policy generated from this learning will have the inheritance flag added to every file executed from this subject.\\
+k & This process can kill protected processes.\\
+l & Enables learning mode for this process.\\
+o & Override ACL inheritance for this process.\\
+p & This process is protected; it can only be killed by processes with the k mode, or by processes within the same subject.\\
+r & Relax ptrace restrictions (allows ptracing of processes other than one's own children).\\
+s & (In v2.2.1 and above): Enable AT\_SECURE when entering this subject. This enables the same environment sanitization that occurs in glibc upon execution of a suid binary.\\
+t & Allow ptracing of any process (do not use unless necessary, allows ptrace to cross subject boundaries). This flag also allows a process to use CLONE\_FS and execute a binary that causes a subject change.\\
+v & This process can view hidden processes.\\
+x & Allows executable anonymous shared memory for this subject.\\
+A & Protect the shared memory of this subject. No other processes but processes contained within this subject may access the shared memory of this subject.\\
+C & Auto-kill all processes belonging to the attacker's IP address upon violation of security policy.\\
+K & When processes belonging to this subject generate an alert, kill the process.\\
+O & Allow loading of writable libraries.\\
+T & Deny execution of binaries or scripts that are writable by any other subject in the policy. This flag is evaluated at policy enable time. All binaries with execute permission that are writable by another subject (ignoring special roles) will be reported and the RBAC system will not allow itself to be enabled until the changes are made.\\
+\hline
+\end{tabular}
+
+Analog dazu folgt nun die vollständige Object-Mode Tabelle:\\
+\begin{tabular}{|lp{13cm}|}
+\hline
+Mode & Meaning \\
+\hline
+a & This object can be opened for appending.\\
+c & Allow creation of the file/directory.\\
+d & Allow deletion of the file/directory.\\
+f & Needed to mark the pipe used for communication with init to transfer the privilege of the persistent role; only valid within a persistent role. Transfer only occurs when the file is opened for writing.\\
+h & This object is hidden.\\
+i & This mode only applies to binaries. When the object is executed, it inherits the ACL of the subject in which it was contained.\\
+l & Lowercase L. Allow a hardlink at this path. Hardlinking requires a minimum of c and l modes, both must have the same permission level.\\
+m & Allow creation of setuid/setgid files/directories and modification of files/directories to be setuid/setgid.\\
+p & Reject all ptraces to this object.\\
+r & This object can be opened for reading.\\
+t & This object can be ptraced, but cannot modify the task. ('ro-ptrace').\\
+w & This object can be opened for writing or appending.\\
+x & This object can be executed (or mmap'd with PROT\_EXEC into a task).\\
+\hline
+A & Audit successful appends to this object.\\
+C & Audit the creation of the file/directory.\\
+D & Audit the deletion of the file/directory.\\
+F & Audit successful finds of this object.\\
+I & Audit successful ACL inherits of this object.\\
+L & Audit link creation.\\
+M & Audit the setuid/setgid creation/modification.\\
+R & Audit successful reads to this object.\\
+W & Audit successful writes to this object.\\
+X & Audit successful execs of this object.\\
+s & Logs will be suppressed for denied access to this object.\\
+\hline
+\end{tabular}
+
+Aufeinander aufbauend stellen diese Regeln eine robuste Policy für das gesamte System dar. Vereinfacht wird das Erzeugen einer Basis-Policy durch die Verwendung des Learning-Mode, siehe \nameref{subsec:Gradm}.
+
+\subsection{Chroot-Hardening}
+\label{subsec:Chroot-Hardening}
+Ein weiteres Feature von GrSecurity ist das sogenannte Chroot-Hardening. Hierbei wird, wie der Name schon vermuten lässt, der \textbf{chroot()}-Mechanismus von Linux gehärtet. Chroot wird verwendet um ganze Prozesse und Dateisysteme in eine Sandbox zu stecken. Es findet meist beim Kompilieren von Software Einsatz indem die Install-routinen innerhalb einer chroot-Umgebung durchgeführt werden und so das fertig installierte Programm mit allen Bibliotheken und Dateien extrahiert und paketisiert werden kann. Auch ist es möglich vollständige Distributionen innerhalb einer chroot auszuführen, einzig der Kernel des Host-Systems übernimmt die Aufgabe des Kernels innerhalb der chroot. Es stellt somit keine Virtualisierung, sondern eine Sandbox dar.\\
+Unter normalen Umständen ist das Verwenden einer chroot unbedenklich und schottet beispielsweise Webserver in einer sauberen, sicheren Umgebung ab. Allerdings kann man mittels der entsprechenden Syscalls aus einer solchen Umgebung ausbrechen:
+\begin{itemize}
+\item 1) Create a temporary directory in its current working directory 
+\item 2) Open the current working directory 
+\item 3) Change the root directory of the process to the temporary directory using chroot(). 
+\item 4) Use fchdir() with the file descriptor of the opened directory to move the current working directory outside the chroot()ed area. 
+\item 5) Perform chdir("..") calls many times to move the current working directory into the real root directory.
+\item 6) Change the root directory of the process to the current working directory, the real root directory, using chroot(".")
+\end{itemize}
+
+Vereinfacht ausgedrückt: Wird innerhalb einer chroot eine weitere chroot erzeugt, so gelten nur die Beschränkungen für die innere chroot. Es kann also einfach mittels eines zuvor besorgten File-Descriptors dass Arbeitsverzeichnis der äußeren chroot verschoben werden. Im Anschluss hieran würde eine einfache Shell ausgeführt werden (execl(/bin/sh)).
+
+Um solchen und anderen Attacken vorzubeugen erweitert GrSecurity die chroot dahingehend, dass viele Syscalls außerhalb der chroot nicht mehr möglich sind (kill, ptrace, capget, setpgid, getpgid, getsid, fcntl, \dots), keine Prozesslistings mehr für /proc außerhalb einer chroot möglich sind, und anderer kleinerer Features wie etwa eingeschränkte Inter-Prozess-Kommunikation.
+
+\subsection{Miscellaneous Features}
+\label{subsec:Miscellaneous Features}
+GrSecurity erweitert zudem die Logging-Funktionalität des Systems immens: Sämtliche chdir(), fehlgeschlagene fork()'s, IPC Erstellung und Entfernung, sowie Mounting/Unmounting und exec() Logging gehören zu den aktivierbaren Optionen. Die Sinnhaftigkeit einiger Logging-Funktionen sei dabei dahingestellt. chdir() wird beispielsweise derart häufig durch Programme aufgerufen, als dass die Logs binnen weniger Sekunden aus allen Nähten platzen würden und Übersichtlichkeit und Aftermath-Suche damit eher erschwert werden.\\
+Desweiteren kann GrSecurity auch mit \fnurl{TPE (Trusted Path Execution)}{https://en.wikipedia.org/wiki/Trusted_path} umgehen, oder es können unbekannte USB-Geräte daran gehindert werden im Subsystem des Kernels initialisiert zu werden (Beispielhafter Schutz vor BadUSB-Angriffen).
+
+\section{Userspace-Tools}
+\label{sec:Userspace-Tools}
+Um mit GrSecurity und PaX zu interagieren stellen diese das Userspace-Tool \textbf{gradm} und die Standard Utils getfattr/setfattr bereit.
+
+\subsection{Gradm}
+\label{subsec:Gradm}
+Gradm wird verwendet um das RBAC-System GrSecurity's zu verwalten. Hierzu gehören Aktivierung/Deaktivierung, Lern-Modus und Policy-Generation. Insofern GrSecurity zum ersten Mal verwendet wird, beziehungsweise die Datei \textbf{/etc/grsec/pw} nicht existiert, so ist es ratsam Konfigurations und Rollen-Passwörter mittels \textbf{gradm -P}, \textbf{gradm -P admin} und \textbf{gradm -P shutdown} zu vergeben.\\
+Um eine simple Basis-Policy zu erhalten kann gradm im Full-System-Learning-Mode betrieben werden. Hierzu genügt ein einfaches \textbf{gradm -F -L /etc/grsec/learning.log} um diesen zu aktiveren. Im Full-System-Learning Mode werden alle Interaktionen zwischen Prozessen, Dateien und Sockets in der learning.log erfasst. Es empfiehlt sich das System vollständig und nach Möglichkeit mehrere Tage im Alltagsgebrauch zu verwenden. Nur so ist sichergestellt dass alle benötigten Programme und Funktionen fehlerfrei arbeiten.\\
+Man sollte beachten, dass bei der anschließenden Generierung der Policy mittels \textbf{gradm -F -L /etc/grsec/learning.log -O /etc/grsec/policy} eine Reduktion der erfassten Ereignisse stattfindet. Das Kriterium dafür sind, dass mindestens 4 ähnliche Ereignisse benötigt werden um einen Zusammenhang zu erschließen.
+
+Ein Beispiel:\\
+Verbindet ein Nutzer sich während des Anlernens des RBAC-Systems per SSH auf einen fremden Server und lässt anschließend die Policy generieren, so würden die entsprechenden Subject Regeln für \textbf{/usr/bin/ssh} wie folgt aussehen:
+
+\begin{lstlisting}[numbers=none, frame=single, lineskip={-2.5pt}, breaklines=true]
+# Role: choopm
+subject /usr/bin/ssh o {
+ ...
+ connect 139.13.80.7/32:22 stream tcp
+ connect 192.168.10.1/32:53 dgram udp
+ sock_allow_family ipv6 netlink
+ ...
+}
+\end{lstlisting}
+
+Man erkennt hier die Remote IP und den Zielport (die initierte SSH-Verbindung), sowie die DNS Anfrage an das Gateway. Beide sind mit dem Subnet /32 maskiert. Dies bedeutet, dass keine anderen Ziel IP-Adressen zugelassen werden.
+
+Erst wenn der Nutzer sich zu mindestens 4 verschiedenen IP-Adressen per SSH verbunden hat ist sichergestellt, dass bei der anschließenden Generierung der Policy ein solches, wesentlich sinnvolleres Ergebnis zustande käme:
+
+\begin{lstlisting}[numbers=none, frame=single, lineskip={-2.5pt}, breaklines=true]
+# Role: choopm
+subject /usr/bin/ssh o {
+ ...
+ connect 0.0.0.0/0:22 stream tcp
+ connect 192.168.10.1/32:53 dgram udp
+ sock_allow_family ipv6 netlink
+ ...
+}
+\end{lstlisting}
+
+Auch hierbei ist zu bedenken, dass man sich nun überall hin per SSH verbinden kann, jedoch als DNS-Server nur die 192.168.10.1 zugelassen ist. Wechselt man also das Netzwerk, so würden DNS-Anfragen nicht mehr beantwortet werden und dieser Verstoß geloggt.
+
+Dieses gleiche Regelreduktionsschema gilt auch für Dateien und Verzeichnisse.
+
+Angenommen der X11-Server legt beim Start über \textbf{startx} eine Datei namens \textbf{/run/X11/session.\textless pid\textgreater}an, so würde auch nur diese eine PID zugelassen werden. Der X11-Server muss demnach mindestens 4 mal gestartet werden, damit GrSecurity das Muster erkennt und eine Regel auf Basis regulärer Ausdrücke erstellt:
+\begin{lstlisting}[numbers=none, frame=single, lineskip={-2.5pt}, breaklines=true]
+# Role: choopm
+subject /usr/bin/X11 o {
+ ...
+ /run/X11/session.[0-9]			wcd
+ ...
+}
+\end{lstlisting}
+
+Sollte der Anwender der Meinung sein er habe den Lernmodus lang genug betrieben und alle eventuellen Kombinationen diverser Laufzeitkonfigurationen durchgespielt, so kann wie bereits erwähnt eine Konfiguration mittels \textbf{gradm -F -L /etc/grsec/learning.log -O /etc/grsec/policy} aus den gesammelten Ereignissen generiert werden. Neue Einträge werden hierbei an die alte Konfiguration angehängt.
+
+Um das RBAC-System von GrSecurity zu aktivieren, reicht ein einfaches \textbf{gradm -E}. Der Schutz ist nun aktiv und nur noch die Regeln in der Policy sind erlaubt. Möchte man den Schutz wieder deaktivieren, so ist dies über ein \textbf{gradm -D} möglich, man muss jedoch in der \textbf{admin}-Rolle authentifiziert sein. Dieses erfolgt über ein \textbf{gradm -a admin}. Mittels \textbf{gradm -u} deauthentifiziert man sich wieder.
+
+Auch hierbei gilt: Alle Aktivitäten betreffend des RBAC-Systems werden im Kernel Log festgehalten.
+
+Sollte der Anwender trotz ausgiebigem Testens und nachträglichem Feintuning der Policy dennoch auf Inkompatibilitäten mit Programmen stoßen, so hilft es meist zuerst im Kernel Log nachzusehen, ob PaX oder GrSec den Dienst verweigerten. Bei zweiterem hilft der ausführliche Log-Eintrag bei der Erstellung einer Regel.
+
+\subsection{setfattr/getfattr}
+\label{subsec:setfattr-getfattr}
+Früher wurde PaX über Flags im ELF-Header gesteuert, dieses hat sich aus Portabilitätsgründen aber als kontraproduktiv bewahrheitet, weshalb die PaX-Flags nun in den erweiterten Dateiattributen innerhalb des Dateisystems gespeichert werden.
+Zur Kompilierungszeit des Kernels wurden Standard PaX-Flags definiert, in den meisten Distributionen sind diese \textbf{PeMRs}.\\
+Diese Defaults gelten für alle Programme. Einige Programme können jedoch nicht damit umgehen und benötigen beispielsweise zwingend das Recht Code auf durch NX-Bit markierten Seiten auszuführen. Hier kommen \textbf{setfattr} und \textbf{getfattr} ins Spiel:
+
+Diese Tools erlauben das Lesen und Setzen von erweiterten Dateiattributen. PaX verwendet das Attribut \textbf{user.pax.flags}, welches eine einfache Buchstabenkombination darstellt. Es können die einzelnen Features durch ihre Kleinschreibweise deaktiviert und durch Großschreibweise explizit aktiviert werden. Um beispielsweise einem Programm unter x86\_64 Codeausführung auf dem Stack zu erlauben, müssen die PaX Flags \nameref{subsec:PAX_PAGEEXEC}, \nameref{subsec:PAX_EMUTRAMP} und \nameref{subsec:PAX_MPROTECT} für das entsprechende Programm deaktiviert werden. Hierzu wird folgender Befehl verwendet: \textbf{setfattr -n user.pax.flags -v "pem" \textless programmpfad\textgreater}. Zum Auslesen der Attribute kann \textbf{getfattr -n user.pax.flags \textless programmpfad\textgreater} verwendet werden.
+
+Die Änderung erfolgt dabei sofort.
+
+\section{Weitere Quellenangaben}
+\label{sec:Weitere Quellenangaben}
+
+\begin{tabular}{ll}
+\href{http://www.bpfh.net/simes/computing/chroot-break.html}{Chroot-Breaking} & http://www.bpfh.net/simes/computing/chroot-break.html\\
+\href{https://en.wikibooks.org/wiki/Grsecurity/}{GrSecurity Handbook} & https://en.wikibooks.org/wiki/Grsecurity/\\
+\href{https://en.wikibooks.org/wiki/Grsecurity/Appendix}{Modes und Flags} & https://en.wikibooks.org/wiki/Grsecurity/Appendix\\
+\href{https://pax.grsecurity.net/docs/index.html}{PaX Docs} & https://pax.grsecurity.net/docs/index.html\\
+\end{tabular}
+
+\section{Anhänge}
+\label{sec:Anhaenge}
+
+\begin{itemize}
+\item Exploit\_Testcases.tar.gz
+\end{itemize}

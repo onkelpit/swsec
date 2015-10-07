@@ -1,0 +1,110 @@
+\section{Einleitung}
+\label{sec:Einleitung}
+Zweck dieser Veranstaltung ist es den Studierenden GrSecurity und PaX näher zu bringen (Seminarpräsentation vom 30.09.2015).
+
+Zur Bearbeitung der Aufgaben wird eine virtuelle Maschine verwendet, deren Appliance kann über \fnurl{Gigamove}{https://gigamove.rz.rwth-aachen.de/d/id/xFWt3sdkPs7D2E} herunter-geladen und anschließend in VirtualBox importiert werden. Sicherheitshalber erstellen Sie vor dem ersten Verwenden der VM einen Sicherungspunkt um jederzeit den Auslieferungszustand wiederherstellen zu können.
+
+Das Passwort für den Nutzer \textbf{john} lautet \textbf{john}.
+
+Im Ordner \textbf{SWSec} finden Sie die benötigten Tools um die folgenden Aufgaben zu bearbeiten.
+
+Für die Aufgaben 4-8 ist es nötig einen gepatchten Kernel zu installieren, näheres hierzu in \nameref{subsec:GrSec Kernel installieren}.
+
+\section{Aufgaben}
+\label{Aufgaben}
+
+\subsection{Exploit verwenden}
+\label{subsec:Exploit verwenden}
+
+Im folgenden Verlauf des Praktikums müssen Sie als Nutzer \textbf{root} arbeiten, jedoch fehlt Ihnen bislang das Passwort. Ihre Aufgabe ist es mittels der Tools im Ordner \textbf{SWSec} eine Root-Shell zu erlangen.\\
+Die Datei source\_me enthält beispielhaften Shellcode den Sie verwenden dürfen. ASLR ist bereits deaktiviert.
+\textit{Hinweis: \textbf{exploitable} und \textbf{filer} haben das SUID-Bit gesetzt. Sie können es verwenden um mittels Puffer-Überlauf Code als Nutzer \textbf{root} auszuführen.}
+
+Stichworte: stack buffer overflow, exploitable, getenvaddr, python2, shellcode, env-var
+
+\subsection{Root PW ändern}
+\label{subsec:Root PW aendern}
+
+Herzlichen Glückwunsch, Sie haben vermutlich gerade eine Root-Shell erlangt und können nun das Passwort des Nutzers \textbf{root} ändern (eventuell Suchmaschinen zur Hilfe verwenden).\\
+Loggen Sie sich aus und als \textbf{root} wieder ein.
+
+\subsection{GrSec Kernel installieren}
+\label{subsec:GrSec Kernel installieren}
+
+Um das Repository von \fnurl{corsac}{http://molly.corsac.net/~corsac/debian/kernel-grsec/packages/} in den Packetmanager zu integrieren muss die Datei \textbf{/etc/apt/sources.list} verändert werden.
+
+Dazu wird der folgende Text an die Datei an gehangen. 
+\begin{lstlisting}[numbers=none, frame=single, lineskip={-2.5pt}]
+deb http://perso.corsac.net/~corsac/debian/kernel-grsec/packages/ jessie/
+\end{lstlisting}
+
+Zur Verifizierung der durch das Repository bereitgestellten Pakete muss der PGP Schlüssel von der Seite heruntergeladen und APT bekanntgemacht werden.
+\begin{lstlisting}[numbers=none, frame=single, lineskip={-2.5pt}]
+wget -O - http://www.corsac.net/71ef0ba8.asc | apt-key -
+\end{lstlisting}
+
+Ein Update des APT-Trees ermöglicht uns die Installation.
+\begin{lstlisting}[numbers=none, frame=single, lineskip={-2.5pt}]
+apt-get update
+\end{lstlisting}
+
+Nun kann GrSecurity und PaX mit dem folgenden Kommando installiert werden.
+\begin{lstlisting}[numbers=none, frame=single, lineskip={-2.5pt}]
+apt-get install linux-image-3.14.50-grsec+ paxctl paxtest
+\end{lstlisting}
+
+Der neue Kernel wird gleich in den Bootmanager grub eingetragen. Beim Neustart ist darauf zu achten, dass der GrSec-Kernel nicht der Standardkernel von grub ist. Da seine Versionsnummer niedriger als die des normalen Debian Kernels ist, muss dieser über die erweiterten Optionen gestartet werden.
+
+Eine Übersicht über die Parameter (nur GrSec und PaX) die beim kompilieren des Kernels benutzt wurden, lässt sich mit dem folgenden Befehl ausgeben.
+\begin{lstlisting}
+cat /boot/config-3.14.50-grsec+ | grep -E '(PAX|GRKERN)'
+\end{lstlisting}
+
+Mit \glqq paxtest\grqq kann das PaX-System auf Funktion überprüft werden.
+\begin{lstlisting}[numbers=none, frame=single, lineskip={-2.5pt}]
+paxtest kiddie
+paxtest blackhat
+\end{lstlisting}
+
+
+\subsection{Exploit unter GrSec/PaX}
+\label{subsec:Exploit unter GrSec/PaX}
+
+Sie sollten nun den GrSec-Kernel verwenden, dies können Sie mittels \textbf{uname -a} verifizieren.
+
+\subsubsection{Exploit PaX - 1}
+\label{subsubsec:Exploit PaX - 1}
+Führen Sie das Exploit wie Sie es bereits in \nameref{subsec:Exploit verwenden} getan haben erneut aus.\\
+Was fällt Ihnen auf?
+
+\subsubsection{Exploit PaX - 2}
+\label{subsubsec:Exploit PaX - 2}
+Verwenden Sie nun die erweiterten Dateisystemattribute um die minimal notwendigen PaX-Flags zu ermitteln die für eine Ausführung des Exploits notwendig sind.
+
+Stichworte: setfattr, getfattr, PEMRS
+\url{https://en.wikibooks.org/wiki/Grsecurity/Appendix/PaX_Flags}
+
+\subsubsection{Bonus: Exploit RBAC - 1}
+\label{subsubsec:Bonus: Exploit RBAC - 1}
+
+Aktivieren Sie mittels \textbf{gradm -F -L /etc/grsec/learning.log} den Full-System Learning Modus von GrSec und verwenden Sie ein paar Befehle, beispielsweise verwenden Sie das Programm \textbf{exploitable} in seinem ursprünglich gedachten Kontext als Begrüßungs-Tool. Verwenden Sie es nicht um eine Shell zu erlangen.
+
+Wenn Sie der Meinung sind ausreichend Aktionen durchgeführt zu haben (Regelreduktion GrSec, min 4x), können Sie mittels \textbf{gradm -D \&\& gradm -F -L /etc/grsec/learning.log -O /etc/grsec/policy} die Policy generieren lassen (eventuell vorher auf die admin-Rolle authentifizieren, siehe \textbf{gradm -h}).
+
+Beheben Sie eventuell auftretende Inkonsistenzen in der Policy und aktivieren Sie anschließend das RBAC-System mittels \textbf{gradm -E} und versuchen Sie erneut das Exploit zu verwenden.
+
+\subsubsection{Bonus: Exploit RBAC - 2}
+\label{subsubsec:Bonus: Exploit RBAC - 2}
+
+Erstellen Sie ein eigenes Subjekt für unser Programm \textbf{exploitable} und tragen Sie die benötigten Objekte und deren Modes ein um eine Ausführung des Exploits zu ermöglichen.
+
+\url{https://en.wikibooks.org/wiki/Grsecurity/Appendix/Subject\_Modes}
+\url{https://en.wikibooks.org/wiki/Grsecurity/Appendix/Object\_Modes}
+
+\subsubsection{Bonus: Filer RBAC}
+\label{subsubsec:Bonus: Filer RBAC}
+
+Sehen Sie sich den Programmtext \textbf{filer.c} an. Auch dieser kann mittels Stack-Buffer-Overflows zur Codeausführung bewegt werden, jedoch ist dieses nicht unser Ziel.\\
+Das Programm liest die Datei \textbf{/etc/logfile.txt} ein und gibt die ersten 63 Byte aus. Die Datei steht nur dem Nutzer \textbf{root} zur Verfügung, weshalb \textbf{filer} das SUID-Bit gesetzt hat.
+
+Gibt man dem Programm einen Pfad zu einer anderen Datei als Parameter mit, so öffnet es stattdessen diese. Generieren Sie eine RBAC-Policy die es unterbindet dass die Datei \textbf{/etc/shadow} eingelesen werden darf.
