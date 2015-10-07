@@ -1,0 +1,238 @@
+%% ========================================================================
+%%%% Disclaimer
+%% ========================================================================
+%%
+%% created by
+%%
+%%      Christoph Hoopmann
+%%
+
+%% ========================================================================
+%%%% Basic settings
+%% ========================================================================
+
+\documentclass[
+	fontsize=12pt, 
+	paper=A4, 
+	parskip=half, 
+	DIV=calc, 
+	headinclude=true, 
+	footinclude=true, 
+	open=right, 
+	appendixprefix=true, 
+	bibliography=totoc, 
+	draft=false, 
+	BCOR=0mm, 
+	oneside ]{scrartcl} 
+
+\usepackage[utf8]{inputenc}
+\usepackage[ngerman]{babel}
+\usepackage[automark]{scrpage2}
+\usepackage[
+	backend=biber, 
+	style=authoryear, 
+	dashed=false, 
+	backref=true, 
+	natbib=true, 
+	hyperref=true]{biblatex}
+\addbibresource{references-biblatex.bib}
+\usepackage[pdftex]{graphicx}
+\usepackage{pifont}
+\usepackage{ifthen}
+\usepackage{xspace}
+\usepackage[usenames,dvipsnames]{xcolor}
+\definecolor{DispositionColor}{RGB}{30,103,182}
+\usepackage[normalem]{ulem}
+\usepackage{framed}
+\usepackage{eso-pic}
+\usepackage{units}
+\usepackage{listings}
+\usepackage{textcomp}
+\usepackage[bottom=10em,top=5em]{geometry}
+\usepackage{paralist}
+\usepackage{amssymb}
+\usepackage{wasysym}
+\pdfcompresslevel=9
+
+\usepackage[
+	unicode=true, 
+	pdftex=true, 
+	backref, 
+	pagebackref=false, 
+	bookmarks=false, 
+	bookmarksopen=false, 
+	pdfpagemode=None, 
+	plainpages=false, 
+	urlcolor=DispositionColor, 
+	linkcolor=DispositionColor, 
+	pagecolor=DispositionColor, 
+	citecolor=DispositionColor, 
+	anchorcolor=DispositionColor, 
+	colorlinks=true]{hyperref}
+
+
+%% ========================================================================
+%%%% Meta Data
+%% ========================================================================
+
+\newcommand{\firstauthor}{Marco Hoffmeier}
+\newcommand{\firstid}{7004700}
+\newcommand{\firstemail}{marco.hoffmeier@technik-emden.de}
+
+\newcommand{\secondauthor}{Christoph Hoopmann}
+\newcommand{\secondid}{7003252}
+\newcommand{\secondemail}{christophhoopmann@gmail.com}
+
+\newcommand{\thirdauthor}{Peter Johennecken}
+\newcommand{\thirdid}{7004634}
+\newcommand{\thirdemail}{peter.johennecken@technik-emden.de}
+
+\newcommand{\mysupervisor}{Prof. Dr.-Ing. Carsten Link}
+\newcommand{\myevaluator}{}
+
+
+\newcommand{\mytitle}{GrSecurity / PaX}
+\newcommand{\myworktitle}{Praktikumsaufgaben - Anleitung}
+
+\newcommand{\mygrade}{Bachelor of Science}
+\newcommand{\mystudy}{Informatik}
+\newcommand{\myuniversity}{Hochschule Emden - Leer}
+\newcommand{\myinstitute}{Technik}
+\newcommand{\mysemester}{WS15/16}
+
+\newcommand{\myhometown}{Emden}
+\newcommand{\mysubmissiondate}{\today} 
+\newcommand{\mysubmissiontown}{\myhometown}
+
+%% ========================================================================
+%%%% MISC command definitions
+%% ========================================================================
+
+%% 1 = name, 2 = scale, 3 = caption
+\newcommand{\myfig}[3]{
+  \begin{figure}[h]
+    \begin{center}
+      \includegraphics[keepaspectratio=true,scale=#2]{figures/#1}
+      \caption{#3}
+      \label{#3}
+    \end{center}
+  \end{figure}
+}
+
+\newcommand\fnurl[2]{%
+  \href{#2}{#1}\footnote{\url{#2}}%
+}
+
+\hypersetup{
+  colorlinks,
+  linktoc=all
+}
+
+\newcommand{\bs}{\ensuremath{\backslash}}
+
+\newcounter{myclonecnt}
+\newcommand{\myclone}[2][2]{%
+  \setcounter{myclonecnt}{#1}%
+  \whiledo{\value{myclonecnt}>0}{#2\addtocounter{myclonecnt}{-1}}%
+}
+%% ========================================================================
+%%%% Typographic settings
+%% ========================================================================
+\usepackage[protrusion=true,factor=900]{microtype}
+\frenchspacing
+\usepackage[sc,osf]{mathpazo}
+\DeclareRobustCommand{\myacro}[1]{\textsc{\lowercase{#1}}}
+\setheadsepline{.4pt}[\color{DispositionColor}]
+\renewcommand{\headfont}{\normalfont\sffamily\color{DispositionColor}}
+\renewcommand{\pnumfont}{\normalfont\sffamily\color{DispositionColor}}
+\addtokomafont{disposition}{\color{DispositionColor}}
+\addtokomafont{caption}{\color{DispositionColor}\footnotesize}
+\addtokomafont{captionlabel}{\color{DispositionColor}}
+\usepackage[bottom]{footmisc}
+\usepackage{enumitem}
+\setlist{noitemsep} 
+\usepackage[babel=true,strict=true,english=american,german=guillemets]{csquotes}
+\linespread{1.5}
+
+\pagestyle{scrheadings}
+\clearscrheadings
+\clearscrplain
+\lohead{\headmark}
+\rohead{\pagemark}
+
+\renewcommand{\ttdefault}{pcr}
+\lstset {literate=%
+	{Ö}{{\"O}}1
+	{Ä}{{\"A}}1
+	{Ü}{{\"U}}1
+	{ß}{{\ss}}1
+	{ö}{{\"o}}1
+	{ä}{{\"a}}1
+	{ü}{{\"u}}1
+	{~}{{\textasciitilde}}1,
+	basicstyle=\small\ttfamily,
+	keywordstyle=\color{blue}\bfseries,
+	stringstyle=\color{red},
+	showstringspaces=false,
+	numbers=left,
+	tabsize=2,
+	moredelim=[is][\bfseries]{[*}{*]}}
+
+	
+\begin{document}
+
+%% ############ titlepage setup
+\begin{titlepage}
+
+\large  %% basic font size of the titlepage
+
+\AddToShipoutPicture*{%
+  \AtPageUpperLeft{%
+    \hspace{10.5mm}%
+    \raisebox{-31.5mm}{%\baselineskip}{%
+     \includegraphics[width=66.88mm]{figures/institution}
+}}}%
+
+\begin{center}
+~
+\vfill\vfill\vfill
+\vfill\vfill\vfill
+\vfill\vfill\vfill
+\vfill\vfill\vfill
+
+{\huge\bfseries\mytitle}
+
+\vfill
+
+{\Large\bfseries\myworktitle}
+
+
+\vfill\vfill\vfill
+\vfill\vfill\vfill
+
+\end{center}
+%\myuniversity\\
+%\noindent\hspace*{5.25mm}Fachbereich \myinstitute\\
+%\noindent\hspace*{5.25mm}Studiengang \mystudy\\
+
+\begin{tabular}{lll} 
+Verfasser: 		& \href{mailto:\firstemail}{\firstauthor}  & Matr.-Nr.: \firstid \\
+				& \href{mailto:\secondemail}{\secondauthor}  & Matr.-Nr.: \secondid \\
+				& \href{mailto:\thirdemail}{\thirdauthor}  & Matr.-Nr.: \thirdid \\
+				\\
+Dozenten:		& \mysupervisor\\
+				& \myevaluator \\
+				\\
+Eingereicht am: & \mysubmissiontown , \mysubmissiondate
+\end{tabular}
+
+\end{titlepage}
+%% ############ titlepage setup  end
+
+\cleardoublepage
+\tableofcontents
+\pagebreak
+
+\input{inhalt}
+
+\end{document}
